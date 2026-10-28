@@ -1,0 +1,456 @@
+{
+  "metadata": {
+    "name": "PayFlow Fintech Payment API Threat Model",
+    "version": "1.0.0",
+    "date": "2026-10-28",
+    "methodologies": [
+      "STRIDE",
+      "MITRE ATT&CK Enterprise v15",
+      "Lockheed Martin Cyber Kill Chain",
+      "Attack Trees"
+    ],
+    "scoring": "likelihood (1-5) x impact (1-5)",
+    "rating_thresholds": {
+      "Critical": "20-25",
+      "High": "12-19",
+      "Medium": "6-11",
+      "Low": "1-5"
+    }
+  },
+  "system": {
+    "components": [
+      {
+        "id": "C1",
+        "name": "Web Client",
+        "technology": "React SPA",
+        "trust_boundary": "TB0 Internet"
+      },
+      {
+        "id": "C2",
+        "name": "API Gateway",
+        "technology": "AWS API Gateway + WAF",
+        "trust_boundary": "TB1 Edge"
+      },
+      {
+        "id": "C3",
+        "name": "Auth Service",
+        "technology": "Python 3.12 FastAPI",
+        "trust_boundary": "TB2 Application"
+      },
+      {
+        "id": "C4",
+        "name": "Payment Service",
+        "technology": "Python 3.12 FastAPI + Celery",
+        "trust_boundary": "TB2 Application"
+      },
+      {
+        "id": "C5",
+        "name": "Database",
+        "technology": "PostgreSQL 16",
+        "trust_boundary": "TB3 Data"
+      },
+      {
+        "id": "C6",
+        "name": "External Stripe API",
+        "technology": "Stripe REST API",
+        "trust_boundary": "TB4 Third Party"
+      },
+      {
+        "id": "C7",
+        "name": "Secrets Manager",
+        "technology": "AWS Secrets Manager / KMS",
+        "trust_boundary": "TB3 Data"
+      },
+      {
+        "id": "C8",
+        "name": "Logging / SIEM",
+        "technology": "CloudWatch + SIEM",
+        "trust_boundary": "TB2 Application"
+      }
+    ]
+  },
+  "threats": [
+    {
+      "id": "T01",
+      "stride_category": "Spoofing",
+      "component": "Auth Service",
+      "description": "Credential stuffing against /auth/login leading to account takeover",
+      "likelihood": 4,
+      "impact": 5,
+      "risk_score": 20,
+      "risk_rating": "Critical",
+      "mitre_attack": [
+        "T1110.004",
+        "T1078"
+      ],
+      "mitigations": [
+        "Mandatory TOTP/WebAuthn MFA",
+        "Per-IP and per-account rate limiting",
+        "Breached-password screening (HIBP)",
+        "WAF bot control"
+      ],
+      "status": "In Progress",
+      "risk_register_id": "R01"
+    },
+    {
+      "id": "T02",
+      "stride_category": "Spoofing",
+      "component": "Payment Service",
+      "description": "Forged Stripe webhook marks unpaid payment as succeeded",
+      "likelihood": 3,
+      "impact": 5,
+      "risk_score": 15,
+      "risk_rating": "High",
+      "mitre_attack": [
+        "T1190"
+      ],
+      "mitigations": [
+        "Verify Stripe-Signature HMAC",
+        "300s timestamp tolerance",
+        "Re-fetch event from Stripe API"
+      ],
+      "status": "Mitigated",
+      "risk_register_id": "R04"
+    },
+    {
+      "id": "T03",
+      "stride_category": "Spoofing",
+      "component": "Auth Service",
+      "description": "JWT forgery via alg none or algorithm confusion",
+      "likelihood": 2,
+      "impact": 5,
+      "risk_score": 10,
+      "risk_rating": "Medium",
+      "mitre_attack": [
+        "T1528",
+        "T1550.001"
+      ],
+      "mitigations": [
+        "Pin RS256",
+        "Validate iss/aud/exp",
+        "Short TTL and refresh rotation",
+        "KMS-managed signing keys"
+      ],
+      "status": "In Progress",
+      "risk_register_id": "R13"
+    },
+    {
+      "id": "T04",
+      "stride_category": "Spoofing",
+      "component": "Web Client",
+      "description": "Phishing clone of login page harvests credentials and OTPs",
+      "likelihood": 4,
+      "impact": 4,
+      "risk_score": 16,
+      "risk_rating": "High",
+      "mitre_attack": [
+        "T1566.002"
+      ],
+      "mitigations": [
+        "WebAuthn passkeys",
+        "DMARC p=reject",
+        "Brand monitoring and takedown"
+      ],
+      "status": "Open",
+      "risk_register_id": "R03"
+    },
+    {
+      "id": "T05",
+      "stride_category": "Tampering",
+      "component": "Payment Service",
+      "description": "Client modifies payment amount or currency in request body",
+      "likelihood": 3,
+      "impact": 5,
+      "risk_score": 15,
+      "risk_rating": "High",
+      "mitre_attack": [
+        "T1565.001",
+        "T1657"
+      ],
+      "mitigations": [
+        "Server-side amount calculation",
+        "Pydantic schema validation"
+      ],
+      "status": "Mitigated",
+      "risk_register_id": "R05"
+    },
+    {
+      "id": "T06",
+      "stride_category": "Tampering",
+      "component": "Database",
+      "description": "SQL injection in transaction search filter modifies ledger",
+      "likelihood": 2,
+      "impact": 5,
+      "risk_score": 10,
+      "risk_rating": "Medium",
+      "mitre_attack": [
+        "T1190",
+        "T1565.001"
+      ],
+      "mitigations": [
+        "SQLAlchemy ORM bound parameters",
+        "Semgrep SQLi rule in CI",
+        "Least-privilege DB user"
+      ],
+      "status": "Mitigated",
+      "risk_register_id": "R12"
+    },
+    {
+      "id": "T07",
+      "stride_category": "Tampering",
+      "component": "Payment Service",
+      "description": "Race condition enables double-spend of balance",
+      "likelihood": 3,
+      "impact": 5,
+      "risk_score": 15,
+      "risk_rating": "High",
+      "mitre_attack": [
+        "T1657"
+      ],
+      "mitigations": [
+        "SELECT FOR UPDATE row locking",
+        "Idempotency keys",
+        "CHECK balance >= 0"
+      ],
+      "status": "In Progress",
+      "risk_register_id": "R06"
+    },
+    {
+      "id": "T08",
+      "stride_category": "Repudiation",
+      "component": "Payment Service",
+      "description": "Customer disputes transfer with no tamper-evident proof of origin",
+      "likelihood": 3,
+      "impact": 3,
+      "risk_score": 9,
+      "risk_rating": "Medium",
+      "mitre_attack": [],
+      "mitigations": [
+        "Append-only audit log",
+        "S3 Object Lock WORM storage"
+      ],
+      "status": "Open",
+      "risk_register_id": "R14"
+    },
+    {
+      "id": "T09",
+      "stride_category": "Repudiation",
+      "component": "Database",
+      "description": "Privileged DBA modifies balances without attribution",
+      "likelihood": 2,
+      "impact": 4,
+      "risk_score": 8,
+      "risk_rating": "Medium",
+      "mitre_attack": [
+        "T1021.004",
+        "T1565.001"
+      ],
+      "mitigations": [
+        "pgAudit",
+        "Named SSO DB accounts",
+        "Just-in-time access with dual approval"
+      ],
+      "status": "Open",
+      "risk_register_id": "R11"
+    },
+    {
+      "id": "T10",
+      "stride_category": "Information Disclosure",
+      "component": "Payment Service",
+      "description": "IDOR/BOLA on GET /payments/{id} exposes other customers' data",
+      "likelihood": 4,
+      "impact": 4,
+      "risk_score": 16,
+      "risk_rating": "High",
+      "mitre_attack": [
+        "T1078"
+      ],
+      "mitigations": [
+        "Owner-scoped queries",
+        "UUIDv4 identifiers",
+        "Automated authz tests in CI"
+      ],
+      "status": "In Progress",
+      "risk_register_id": "R02"
+    },
+    {
+      "id": "T11",
+      "stride_category": "Information Disclosure",
+      "component": "Payment Service",
+      "description": "Stripe secret key or DB password leaked in source or logs",
+      "likelihood": 3,
+      "impact": 5,
+      "risk_score": 15,
+      "risk_rating": "High",
+      "mitre_attack": [
+        "T1552.001"
+      ],
+      "mitigations": [
+        "AWS Secrets Manager",
+        "Gitleaks pre-commit and CI",
+        "Log redaction",
+        "Restricted Stripe keys"
+      ],
+      "status": "In Progress",
+      "risk_register_id": "R07"
+    },
+    {
+      "id": "T12",
+      "stride_category": "Information Disclosure",
+      "component": "API Gateway",
+      "description": "Verbose error responses leak stack traces and versions",
+      "likelihood": 4,
+      "impact": 2,
+      "risk_score": 8,
+      "risk_rating": "Medium",
+      "mitre_attack": [
+        "T1190"
+      ],
+      "mitigations": [
+        "Global exception handler",
+        "debug=False",
+        "Strip Server headers"
+      ],
+      "status": "Open",
+      "risk_register_id": null
+    },
+    {
+      "id": "T13",
+      "stride_category": "Information Disclosure",
+      "component": "Database",
+      "description": "Unencrypted DB snapshot shared publicly",
+      "likelihood": 2,
+      "impact": 5,
+      "risk_score": 10,
+      "risk_rating": "Medium",
+      "mitre_attack": [
+        "T1530"
+      ],
+      "mitigations": [
+        "KMS-encrypted snapshots",
+        "SCP deny public sharing",
+        "AWS Config alerting"
+      ],
+      "status": "Open",
+      "risk_register_id": "R11"
+    },
+    {
+      "id": "T14",
+      "stride_category": "Denial of Service",
+      "component": "API Gateway",
+      "description": "Layer-7 flood exhausts payment API workers",
+      "likelihood": 3,
+      "impact": 4,
+      "risk_score": 12,
+      "risk_rating": "High",
+      "mitre_attack": [
+        "T1499.003"
+      ],
+      "mitigations": [
+        "AWS Shield",
+        "WAF rate-based rules",
+        "Autoscaling",
+        "Request size limits"
+      ],
+      "status": "Open",
+      "risk_register_id": "R10"
+    },
+    {
+      "id": "T15",
+      "stride_category": "Denial of Service",
+      "component": "Auth Service",
+      "description": "Mass account lockout abuse",
+      "likelihood": 3,
+      "impact": 3,
+      "risk_score": 9,
+      "risk_rating": "Medium",
+      "mitre_attack": [
+        "T1110.004"
+      ],
+      "mitigations": [
+        "Progressive delays and CAPTCHA instead of hard lockout",
+        "Per-IP throttling"
+      ],
+      "status": "Open",
+      "risk_register_id": null
+    },
+    {
+      "id": "T16",
+      "stride_category": "Denial of Service",
+      "component": "Payment Service",
+      "description": "Unbounded queries exhaust DB connections",
+      "likelihood": 3,
+      "impact": 3,
+      "risk_score": 9,
+      "risk_rating": "Medium",
+      "mitre_attack": [
+        "T1499.003"
+      ],
+      "mitigations": [
+        "Pagination max 100",
+        "statement_timeout",
+        "Connection pool limits"
+      ],
+      "status": "Open",
+      "risk_register_id": "R10"
+    },
+    {
+      "id": "T17",
+      "stride_category": "Elevation of Privilege",
+      "component": "Auth Service",
+      "description": "Mass assignment of role=admin in profile update",
+      "likelihood": 3,
+      "impact": 5,
+      "risk_score": 15,
+      "risk_rating": "High",
+      "mitre_attack": [
+        "T1068"
+      ],
+      "mitigations": [
+        "Explicit Pydantic input models",
+        "RBAC on admin routes"
+      ],
+      "status": "Open",
+      "risk_register_id": "R08"
+    },
+    {
+      "id": "T18",
+      "stride_category": "Elevation of Privilege",
+      "component": "Payment Service",
+      "description": "RCE via vulnerable dependency or base image",
+      "likelihood": 3,
+      "impact": 5,
+      "risk_score": 15,
+      "risk_rating": "High",
+      "mitre_attack": [
+        "T1195.002",
+        "T1190"
+      ],
+      "mitigations": [
+        "Trivy image scan blocking High/Critical",
+        "Semgrep SAST",
+        "Dependabot",
+        "Distroless non-root read-only containers"
+      ],
+      "status": "In Progress",
+      "risk_register_id": "R09"
+    }
+  ],
+  "summary": {
+    "total_threats": 18,
+    "by_rating": {
+      "Critical": 1,
+      "High": 9,
+      "Medium": 8,
+      "Low": 0
+    },
+    "by_stride": {
+      "Spoofing": 4,
+      "Tampering": 3,
+      "Repudiation": 2,
+      "Information Disclosure": 4,
+      "Denial of Service": 3,
+      "Elevation of Privilege": 2
+    }
+  }
+}
